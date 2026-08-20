@@ -1,17 +1,27 @@
-# Words (VoicePolyglot)
+# Words
 
 A voice-only language app for a toddler who can't read yet. No text on screen,
 no menus, no scores. She taps one big picture, hears a word, says it back, and
 the app plays a soft chime if she got it. It teaches English, Spanish,
 Mandarin, and Japanese at once, cycling through the same 30 objects in all
-four, and quietly repeats whichever words she's been missing. It's built to
-run fully offline on an old iPad.
+four, and quietly repeats whichever words she's been missing.
 
-## Why a native iOS app
+There are two builds of the same idea, in this repo:
+
+- **`VoicePolyglot/`** — a native SwiftUI iPad app. On-device speech
+  recognition, works with the iPad fully offline (in Airplane Mode), but
+  needs a Mac + Xcode to build.
+- **`web/`** — a plain web page / PWA. Much simpler to run (just needs
+  hosting over HTTPS), but uses the browser's cloud speech recognition, so
+  it needs an internet connection to check what the child said.
+
+Pick based on whether offline matters more than ease of deployment.
+
+## VoicePolyglot (native iOS app)
 
 Offline, on-device speech recognition on an iPad is only reliably available
 through Apple's `Speech` framework — no web browser on iOS offers that. So
-this is a SwiftUI app, not a web page.
+this build is a SwiftUI app, not a web page.
 
 ## Project layout
 
@@ -98,3 +108,9 @@ over the emoji automatically.
   a wrong answer.
 - No unit tests yet — this hasn't been run on real hardware or verified in
   Xcode (this project was scaffolded without access to a Mac/Xcode).
+
+## web (browser version)
+
+See [`web/README.md`](web/README.md) for the simpler, online-only build —
+same vocabulary and game logic, runs as a hosted web page instead of
+requiring Xcode.

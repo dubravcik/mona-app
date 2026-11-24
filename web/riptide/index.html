@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Riptide Chord Trainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: friendly practice buddy, beach-bright, clear at arm's length
+   IDEA: a surf-shop chord chart pinned above the amp
+   PICTURE: huge current chord + its uke fretboard diagram, live 12-note listening meter
+   COLOUR and TYPE: deep sea teal, sand, coral accent; Rubik
+   LAYOUT: chord stage on top, progress strip, meter, controls; stacks on phone */
+:root{color-scheme:light dark;--bg:light-dark(#f4ead8,#0c2a2e);--panel:light-dark(#fffaf1,#123a40);--ink:light-dark(#0c2a2e,#f4ead8);--mute:light-dark(#5b6b66,#9fb8b4);--sea:light-dark(#0f6b70,#3fb7b4);--coral:#ff6b4a;--ok:light-dark(#178a52,#4fd18b)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Rubik,system-ui,sans-serif;overflow-x:clip}
+.band{padding:clamp(20px,4vw,48px) max(5vw,16px);max-width:1100px;margin:auto}
+h1{font-size:clamp(26px,5vw,40px);line-height:1.05;margin:0 0 4px}
+.sub{color:var(--mute);margin:0 0 18px}
+.stage{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:18px;background:var(--sea);color:#fff;border-radius:22px;padding:clamp(18px,3vw,32px);position:relative;overflow:hidden}
+.stage::after{content:"";position:absolute;left:-10%;right:-10%;bottom:-40px;height:90px;background:radial-gradient(60% 60px at 50% 0,rgba(255,255,255,.18),transparent);pointer-events:none}
+.sec{font-weight:600;opacity:.85}
+.big{font-size:clamp(96px,22vw,180px);font-weight:800;line-height:.95;letter-spacing:-.03em;transition:transform .25s}
+.big.hit{color:#fff3a8;transform:scale(1.06)}
+.next{font-size:20px;opacity:.85}
+.next b{font-size:26px}
+.diag{display:flex;align-items:center;justify-content:center}
+.diag svg{width:min(100%,230px);height:auto}
+.status{margin-top:10px;font-size:17px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.pill{background:rgba(255,255,255,.16);border-radius:99px;padding:4px 12px}
+.hold{height:8px;border-radius:9px;background:rgba(255,255,255,.2);margin-top:10px;overflow:hidden}
+.hold i{display:block;height:100%;width:0;background:var(--coral);transition:width .08s}
+.strip{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0}
+.strip span{min-width:44px;text-align:center;padding:6px 8px;border-radius:10px;background:var(--panel);font-weight:600;cursor:pointer;border:2px solid transparent}
+.strip span.done{background:var(--ok);color:#fff}
+.strip span.cur{border-color:var(--coral)}
+.strip em{flex-basis:100%;font-style:normal;color:var(--mute);font-size:13px;margin-top:6px}
+.meter{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px;align-items:end;height:110px;background:var(--panel);border-radius:16px;padding:12px 12px 26px;position:relative}
+.meter div{background:var(--sea);border-radius:5px 5px 0 0;height:2%;position:relative;transition:height .08s}
+.meter div.on{background:var(--coral)}
+.meter div::after{content:attr(data-n);position:absolute;bottom:-21px;left:0;right:0;text-align:center;font-size:13px;color:var(--mute)}
+.ctl{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;align-items:center}
+button,label.btn{font:600 16px Rubik,sans-serif;min-height:44px;padding:0 18px;border-radius:12px;border:2px solid var(--sea);background:var(--panel);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center}
+button.go{background:var(--coral);border-color:var(--coral);color:#fff}
+button:focus-visible,label.btn:focus-within{outline:3px solid var(--coral);outline-offset:2px}
+input[type=file]{position:absolute;opacity:0;width:1px}
+.note{background:var(--panel);border-radius:14px;padding:12px 16px;margin-top:16px;color:var(--mute);font-size:15px}
+.note b{color:var(--ink)}
+details{margin-top:14px}summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
+textarea{width:100%;min-height:150px;font:15px/1.5 ui-monospace,monospace;border-radius:12px;border:2px solid var(--sea);padding:10px;background:var(--panel);color:var(--ink)}
+.done-msg{display:none;font-size:22px;font-weight:800;color:var(--coral);margin-top:10px}
+@media(max-width:600px){.stage{grid-template-columns:1fr}.diag svg{width:170px}}
+@media(prefers-reduced-motion:reduce){.big,.meter div,.hold i{transition:none}}
+</style></head><body>
+<main class="band">
+  <h1>Riptide chord trainer</h1>
+  <p class="sub">Play the chord on the screen. When I hear it clearly, I move on to the next one.</p>
+
+  <section class="stage" aria-live="polite">
+    <div>
+      <div class="sec" id="sec">Intro</div>
+      <div class="big" id="big">Am</div>
+      <div class="next">Next: <b id="nxt">G</b></div>
+      <div class="status"><span class="pill" id="state">Not listening</span><span class="pill">Hearing: <b id="heard">–</b></span></div>
+      <div class="hold"><i id="hold"></i></div>
+      <div class="done-msg" id="fin">Song complete! 🌊</div>
+    </div>
+    <div class="diag" id="diag"></div>
+  </section>
+
+  <div class="strip" id="strip"></div>
+
+  <div class="meter" id="meter" aria-label="Notes heard"></div>
+
+  <div class="ctl">
+    <button class="go" id="mic">🎤 Listen live</button>
+    <label class="btn">📁 Check a recording<input type="file" id="file" accept="audio/*,video/*"></label>
+    <button id="skip">Skip chord</button>
+    <button id="reset">Start over</button>
+  </div>
+
+  <div class="note" id="info"><b>Tips:</b> strum the chord several times and let it ring. Keep the phone or laptop close to the ukulele in a quiet room. Tap any chord in the strip to jump there. Standard GCEA tuning, no capo.</div>
+
+  <details>
+    <summary>Edit the chord sequence</summary>
+    <p class="sub">One section per line: <code>Name: chords</code>. Chords supported: Am G C F Em Dm A D E.</p>
+    <textarea id="seqText"></textarea>
+    <div class="ctl"><button id="apply">Use this sequence</button></div>
+  </details>
+</main>
+<script>
+{
+const DEFAULT=`Intro: Am G C Am G C
+Verse 1: Am G C Am G C Am G C Am G C
+Pre-chorus: Am G C Am G C
+Chorus: Am G C Am G C Am G C Am G C
+Verse 2: Am G C Am G C Am G C Am G C
+Chorus: Am G C Am G C Am G C Am G C
+Bridge: Am G C F Am G C F
+Chorus: Am G C Am G C Am G C Am G C`;
+// pitch classes C=0
+const CH={Am:[9,0,4],G:[7,11,2],C:[0,4,7],F:[5,9,0],Em:[4,7,11],Dm:[2,5,9],A:[9,1,4],D:[2,6,9],E:[4,8,11]};
+// uke frets G C E A
+const SHAPE={Am:[2,0,0,0],G:[0,2,3,2],C:[0,0,0,3],F:[2,0,1,0],Em:[0,4,3,2],Dm:[2,2,1,0],A:[2,1,0,0],D:[2,2,2,0],E:[1,4,0,2]};
+const NOTES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const $=id=>document.getElementById(id);
+let seq=[],idx=0,holdN=0,listening=false,ctx,an,stream,timer;
+const NEED=5;// consecutive frames (~0.4s)
+
+function parse(t){const out=[];t.split('\n').forEach(l=>{const m=l.split(':');if(m.length<2)return;const name=m[0].trim();m.slice(1).join(':').trim().split(/\s+/).forEach(c=>{if(CH[c])out.push({c,s:name})})});return out}
+function load(t){const s=parse(t);if(!s.length)return;seq=s;idx=0;render()}
+try{$('seqText').value=localStorage.getItem('riptideSeq')||DEFAULT}catch(e){$('seqText').value=DEFAULT}
+load($('seqText').value);
+
+function diagram(c){const f=SHAPE[c],W=200,H=230,x0=40,dx=40,y0=40,dy=42;let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${c} ukulele chord shape">`;
+s+=`<rect x="${x0}" y="${y0-6}" width="${dx*3}" height="6" fill="#fff"/>`;
+for(let i=0;i<5;i++)s+=`<line x1="${x0}" x2="${x0+dx*3}" y1="${y0+dy*i}" y2="${y0+dy*i}" stroke="rgba(255,255,255,.6)" stroke-width="2"/>`;
+['G','C','E','A'].forEach((n,i)=>{const x=x0+dx*i;s+=`<line x1="${x}" x2="${x}" y1="${y0}" y2="${y0+dy*4}" stroke="#fff" stroke-width="2"/><text x="${x}" y="${H-8}" fill="#fff" font-size="15" text-anchor="middle" opacity=".8">${n}</text>`;
+ if(f[i]===0)s+=`<circle cx="${x}" cy="${y0-20}" r="7" fill="none" stroke="#fff" stroke-width="2"/>`;else s+=`<circle cx="${x}" cy="${y0+dy*(f[i]-.5)}" r="13" fill="#ff6b4a"/>`});
+return s+'</svg>'}
+
+function render(){const done=idx>=seq.length;const cur=seq[Math.min(idx,seq.length-1)];
+ $('big').textContent=done?'🎉':cur.c;$('sec').textContent=done?'Finished':cur.s;
+ $('nxt').textContent=done?'–':(seq[idx+1]?seq[idx+1].c:'end');
+ $('diag').innerHTML=done?'':diagram(cur.c);$('fin').style.display=done?'block':'none';
+ let h='',last='';seq.forEach((x,i)=>{if(x.s!==last){h+=`<em>${x.s}</em>`;last=x.s}h+=`<span data-i="${i}" class="${i<idx?'done':''}${i===idx?' cur':''}">${x.c}</span>`});
+ $('strip').innerHTML=h;holdN=0;$('hold').style.width='0'}
+
+$('meter').innerHTML=NOTES.map(n=>`<div data-n="${n}"></div>`).join('');
+const bars=[...$('meter').children];
+
+// FFT
+function fft(re,im){const n=re.length;for(let i=1,j=0;i<n;i++){let b=n>>1;for(;j&b;b>>=1)j^=b;j^=b;if(i<j){[re[i],re[j]]=[re[j],re[i]];[im[i],im[j]]=[im[j],im[i]]}}
+ for(let len=2;len<=n;len<<=1){const a=-2*Math.PI/len,wr=Math.cos(a),wi=Math.sin(a);for(let i=0;i<n;i+=len){let cr=1,ci=0;for(let k=0;k<len/2;k++){const p=i+k,q=p+len/2,tr=re[q]*cr-im[q]*ci,ti=re[q]*ci+im[q]*cr;re[q]=re[p]-tr;im[q]=im[p]-ti;re[p]+=tr;im[p]+=ti;const t=cr*wr-ci*wi;ci=cr*wi+ci*wr;cr=t}}}}
+const N=8192;
+function analyse(buf,sr){let rms=0;for(let i=0;i<N;i++)rms+=buf[i]*buf[i];rms=Math.sqrt(rms/N);
+ const re=new Float32Array(N),im=new Float32Array(N);for(let i=0;i<N;i++)re[i]=buf[i]*(.5-.5*Math.cos(2*Math.PI*i/(N-1)));fft(re,im);
+ const chroma=new Array(12).fill(0);for(let k=1;k<N/2;k++){const f=k*sr/N;if(f<240||f>2100)continue;const m=Math.sqrt(re[k]*re[k]+im[k]*im[k]);const midi=69+12*Math.log2(f/440);const pc=((Math.round(midi)%12)+12)%12;chroma[pc]+=Math.sqrt(m)}
+ const mx=Math.max(...chroma)||1;const c=chroma.map(v=>v/mx);
+ let best=null,bs=-1;const nrm=Math.hypot(...c)||1;for(const k in CH){let d=0;CH[k].forEach(p=>d+=c[p]);const sc=d/(Math.sqrt(3)*nrm);if(sc>bs){bs=sc;best=k}}
+ return {rms,c,best,score:bs}}
+
+function step(r){bars.forEach((b,i)=>{b.style.height=Math.max(2,r.c[i]*100)+'%';b.classList.toggle('on',r.c[i]>.6)});
+ const loud=r.rms>0.008,ok=loud&&r.score>0.72;$('heard').textContent=ok?r.best:'–';
+ if(idx>=seq.length)return false;
+ if(ok&&r.best===seq[idx].c){holdN++}else holdN=Math.max(0,holdN-1);
+ $('hold').style.width=(holdN/NEED*100)+'%';
+ if(holdN>=NEED){$('big').classList.add('hit');setTimeout(()=>$('big').classList.remove('hit'),250);idx++;render();return true}return false}
+
+async function startMic(){if(listening){stop();return}
+ try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}})}
+ catch(e){$('state').textContent='Mic blocked';$('info').innerHTML='<b>The microphone is blocked here.</b> Claude’s artifact viewer doesn’t allow mic access. Open the downloaded HTML file in Chrome or Safari for live listening, or use “Check a recording” to upload a voice memo of you playing.';return}
+ ctx=new (window.AudioContext||window.webkitAudioContext)();an=ctx.createAnalyser();an.fftSize=N;ctx.createMediaStreamSource(stream).connect(an);
+ const buf=new Float32Array(N);listening=true;$('mic').textContent='⏹ Stop listening';$('state').textContent='Listening…';
+ timer=setInterval(()=>{an.getFloatTimeDomainData(buf);step(analyse(buf,ctx.sampleRate))},80)}
+function stop(){listening=false;clearInterval(timer);stream&&stream.getTracks().forEach(t=>t.stop());ctx&&ctx.close();$('mic').textContent='🎤 Listen live';$('state').textContent='Not listening'}
+
+async function checkFile(f){if(!f)return;$('state').textContent='Analysing recording…';
+ try{const ac=new (window.AudioContext||window.webkitAudioContext)();const ab=await ac.decodeAudioData(await f.arrayBuffer());
+  const d=ab.getChannelData(0),sr=ab.sampleRate,hop=Math.round(sr*0.08);const start=idx;
+  for(let p=0;p+N<d.length;p+=hop){step(analyse(d.subarray(p,p+N),sr));if(idx>=seq.length)break}
+  $('state').textContent=`Recording matched ${idx-start} chord${idx-start===1?'':'s'}`;ac.close()}
+ catch(e){$('state').textContent='Could not read that file'}}
+
+$('mic').onclick=startMic;
+$('file').onchange=e=>checkFile(e.target.files[0]);
+$('skip').onclick=()=>{if(idx<seq.length){idx++;render()}};
+$('reset').onclick=()=>{idx=0;render()};
+$('strip').onclick=e=>{const i=e.target.dataset.i;if(i!==undefined){idx=+i;render()}};
+$('apply').onclick=()=>{const t=$('seqText').value;try{localStorage.setItem('riptideSeq',t)}catch(e){}load(t)};
+}
+</script>
+</body></html>

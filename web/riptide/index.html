@@ -102,7 +102,7 @@ textarea{width:100%;min-height:150px;font:15px/1.5 ui-monospace,monospace;border
   <div class="ctl">
     <button class="go" id="mic">🎤 Listen live</button>
     <label class="btn playonly">📁 Check a recording<input type="file" id="file" accept="audio/*,video/*"></label>
-    <label class="btn sens playonly">Sensitivity <select id="sens"><option value="0.72">Strict</option><option value="0.6" selected>Normal</option><option value="0.5">Easy</option></select></label>
+    <label class="btn sens playonly">Sensitivity <select id="sens"><option value="0.88">Strict</option><option value="0.8" selected>Normal</option><option value="0.7">Easy</option></select></label>
     <button id="skip" class="playonly">Skip chord</button>
     <button id="reset" class="playonly">Start over</button>
   </div>
@@ -186,15 +186,23 @@ function analyse(buf,sr){let rms=0;for(let i=0;i<N;i++)rms+=buf[i]*buf[i];rms=Ma
  const chroma=new Array(12).fill(0);for(let k=1;k<N/2;k++){const f=k*sr/N;if(f<240||f>2100)continue;const m=Math.sqrt(re[k]*re[k]+im[k]*im[k]);const midi=69+12*Math.log2(f/440);const pc=((Math.round(midi)%12)+12)%12;chroma[pc]+=Math.sqrt(m)}
  const srt=[...chroma].sort((a,b)=>a-b),floor=srt[5];const mx=Math.max(...chroma)-floor||1;const c=chroma.map(v=>Math.max(0,v-floor)/mx);
  return {rms,c}}
+// templates built from the real ukulele voicings (GCEA, re-entrant G) with overtones
+const OPEN=[67,60,64,69],TPL={};
+for(const k in SHAPE){const t=new Array(12).fill(0);SHAPE[k].forEach((fr,i)=>{const m=OPEN[i]+fr,f0=440*2**((m-69)/12);for(let h=1;h<=5;h++){const f=f0*h;if(f>2100)break;const pc=((Math.round(69+12*Math.log2(f/440))%12)+12)%12;t[pc]+=1/h}});const mx=Math.max(...t);TPL[k]=t.map(v=>v/mx)}
 function classify(c){
- const sc={};let best=null,bs=-1;const nrm=Math.hypot(...c)||1;for(const k of cands()){let d=0;CH[k].forEach(p=>d+=c[p]);const s1=d/(Math.sqrt(3)*nrm);sc[k]=s1;if(s1>bs){bs=s1;best=k}}
- return {best,score:bs,sc}}
+ const sc={};let best=null,bs=-1,second=-1;const nrm=Math.hypot(...c)||1;
+ for(const k of cands()){const t=TPL[k];let d=0;for(let i=0;i<12;i++)d+=c[i]*t[i];const s1=d/(nrm*Math.hypot(...t));sc[k]=s1;if(s1>bs){second=bs;bs=s1;best=k}else if(s1>second)second=s1}
+ return {best,score:bs,second,sc}}
 function cands(){const u=[...new Set(seq.map(x=>x.c))];return u.length>1?u:Object.keys(CH)}
-let sm=new Array(12).fill(0),noise=0.002;
+let sm=new Array(12).fill(0),noise=0.002,prevRms=0,armed=true,quiet=0,lastAcc='';
 
 function step(r){
  if(r.rms<noise*3)noise=noise*0.95+r.rms*0.05;
  const loud=r.rms>Math.max(0.0015,noise*2.5);
+ // a new strum = sudden jump in loudness; it re-arms matching after each accepted chord
+ const onset=loud&&r.rms>prevRms*1.5;prevRms=prevRms*0.6+r.rms*0.4;
+ if(!loud)quiet++;else quiet=0;
+ if(onset||quiet>3){if(!armed)sm=sm.map(()=>0);armed=true}
  sm=sm.map((v,i)=>loud?v*0.5+r.c[i]*0.5:v*0.8);
  const m=Math.max(...sm)||1,c=sm.map(v=>v/m);
  bars.forEach((b,i)=>{b.style.height=Math.max(2,c[i]*100)+'%';b.classList.toggle('on',c[i]>.6)});
@@ -204,10 +212,10 @@ function step(r){
  if(idx>=seq.length)return false;
  const tgt=seq[idx].c,ts=k.sc[tgt]||0;
  $('conf').textContent=loud?Math.round(ts*100)+'%':'–';
- const ok=loud&&ts>=th&&ts>=k.score-0.04;
+ const ok=(armed||tgt!==lastAcc)&&loud&&ts>=th&&k.best===tgt&&ts-k.second>=0.02;
  if(ok){holdN++}else holdN=Math.max(0,holdN-1);
  $('hold').style.width=(holdN/NEED*100)+'%';
- if(holdN>=NEED){$('big').classList.add('hit');setTimeout(()=>$('big').classList.remove('hit'),250);idx++;render();return true}return false}
+ if(holdN>=NEED){$('big').classList.add('hit');setTimeout(()=>$('big').classList.remove('hit'),250);lastAcc=seq[idx].c;idx++;render();armed=false;return true}return false}
 
 async function startMic(){if(listening){stop();return}
  ctx=new (window.AudioContext||window.webkitAudioContext)();ctx.resume&&ctx.resume();
@@ -230,7 +238,7 @@ function setMode(m){mode=m;document.body.classList.toggle('tune',m==='tune');$('
 $('tTune').onclick=()=>setMode('tune');$('tPlay').onclick=()=>setMode('play');
 $('file').onchange=e=>checkFile(e.target.files[0]);
 $('skip').onclick=()=>{if(idx<seq.length){idx++;render()}};
-$('reset').onclick=()=>{idx=0;render()};
+$('reset').onclick=()=>{idx=0;lastAcc='';render()};
 $('strip').onclick=e=>{const i=e.target.dataset.i;if(i!==undefined){idx=+i;render()}};
 $('apply').onclick=()=>{const t=$('seqText').value;try{localStorage.setItem('riptideSeq',t)}catch(e){}load(t)};
 }

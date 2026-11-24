@@ -32,6 +32,17 @@ h1{font-size:clamp(26px,5vw,40px);line-height:1.05;margin:0 0 4px}
 .hold i{display:block;height:100%;width:0;background:var(--coral);transition:width .08s}
 .lvl{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;opacity:.9}.lvl>div{flex:1;height:6px;border-radius:9px;background:rgba(255,255,255,.2);overflow:hidden}.lvl i{display:block;height:100%;width:0;background:#fff3a8}
 select{font:600 16px Rubik,sans-serif;margin-left:8px;background:transparent;color:inherit;border:0}
+ body.tune .playonly{display:none!important}body:not(.tune) #tuner{display:none}
+.tabs{display:flex;gap:8px;margin:0 0 14px}.tabs button{flex:1}.tabs button.on{background:var(--sea);color:#fff}
+.cents{position:relative;height:34px;margin:16px 0 4px;border-radius:9px;background:rgba(255,255,255,.18)}
+.cents::before{content:"";position:absolute;left:45%;width:10%;top:0;bottom:0;background:rgba(79,209,139,.55)}
+.cents .mid{position:absolute;left:calc(50% - 1px);top:0;bottom:0;width:2px;background:#fff}
+#needle{position:absolute;top:3px;bottom:3px;width:12px;margin-left:-6px;border-radius:6px;background:#fff3a8;left:50%;transition:left .1s;opacity:.3}
+.scale{display:flex;justify-content:space-between;font-size:13px;opacity:.85}
+.strings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-content:center;max-width:300px;margin:auto;width:100%}
+.str{aspect-ratio:1;border-radius:50%;border:3px solid rgba(255,255,255,.5);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:40px;font-weight:800;line-height:1}
+.str small{font-size:13px;font-weight:400;opacity:.85;margin-top:4px}
+.str.cur{background:#fff;color:#0f6b70;border-color:#fff}.str.ok{background:#178a52;border-color:#4fd18b;color:#fff}
 .strip{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0}
 .strip span{min-width:44px;text-align:center;padding:6px 8px;border-radius:10px;background:var(--panel);font-weight:600;cursor:pointer;border:2px solid transparent}
 .strip span.done{background:var(--ok);color:#fff}
@@ -53,12 +64,25 @@ textarea{width:100%;min-height:150px;font:15px/1.5 ui-monospace,monospace;border
 .done-msg{display:none;font-size:22px;font-weight:800;color:var(--coral);margin-top:10px}
 @media(max-width:600px){.stage{grid-template-columns:1fr}.diag svg{width:170px}}
 @media(prefers-reduced-motion:reduce){.big,.meter div,.hold i{transition:none}}
-</style></head><body>
+</style></head><body class="tune">
 <main class="band">
   <h1>Riptide chord trainer</h1>
-  <p class="sub">Play the chord on the screen. When I hear it clearly, I move on to the next one.</p>
+  <p class="sub">Tune first, then play the chord on the screen. When I hear it clearly, I move on to the next one.</p>
+  <nav class="tabs"><button id="tTune" class="on">1. Tune</button><button id="tPlay">2. Play Riptide</button></nav>
 
-  <section class="stage" aria-live="polite">
+  <section class="stage" id="tuner" aria-live="polite">
+    <div>
+      <div class="sec">Tuner · standard GCEA</div>
+      <div class="big" id="tNote">–</div>
+      <div class="next" id="tHint">Tap Listen, then pluck one string at a time</div>
+      <div class="cents"><i class="mid"></i><b id="needle"></b></div>
+      <div class="scale"><span>Too low</span><span>In tune</span><span>Too high</span></div>
+      <div class="status"><span class="pill" id="tHz">– Hz</span><span class="pill" id="tCents">– cents</span></div>
+    </div>
+    <div class="strings" id="strs"></div>
+  </section>
+
+  <section class="stage playonly" aria-live="polite">
     <div>
       <div class="sec" id="sec">Intro</div>
       <div class="big" id="big">Am</div>
@@ -71,21 +95,21 @@ textarea{width:100%;min-height:150px;font:15px/1.5 ui-monospace,monospace;border
     <div class="diag" id="diag"></div>
   </section>
 
-  <div class="strip" id="strip"></div>
+  <div class="strip playonly" id="strip"></div>
 
-  <div class="meter" id="meter" aria-label="Notes heard"></div>
+  <div class="meter playonly" id="meter" aria-label="Notes heard"></div>
 
   <div class="ctl">
     <button class="go" id="mic">🎤 Listen live</button>
-    <label class="btn">📁 Check a recording<input type="file" id="file" accept="audio/*,video/*"></label>
-    <label class="btn sens">Sensitivity <select id="sens"><option value="0.72">Strict</option><option value="0.6" selected>Normal</option><option value="0.5">Easy</option></select></label>
-    <button id="skip">Skip chord</button>
-    <button id="reset">Start over</button>
+    <label class="btn playonly">📁 Check a recording<input type="file" id="file" accept="audio/*,video/*"></label>
+    <label class="btn sens playonly">Sensitivity <select id="sens"><option value="0.72">Strict</option><option value="0.6" selected>Normal</option><option value="0.5">Easy</option></select></label>
+    <button id="skip" class="playonly">Skip chord</button>
+    <button id="reset" class="playonly">Start over</button>
   </div>
 
   <div class="note" id="info"><b>Tips:</b> strum the chord several times and let it ring. Keep the phone or laptop close to the ukulele in a quiet room. Tap any chord in the strip to jump there. Standard GCEA tuning, no capo.</div>
 
-  <details>
+  <details class="playonly">
     <summary>Edit the chord sequence</summary>
     <p class="sub">One section per line: <code>Name: chords</code>. Chords supported: Am G C F Em Dm A D E.</p>
     <textarea id="seqText"></textarea>
@@ -109,7 +133,27 @@ const SHAPE={Am:[2,0,0,0],G:[0,2,3,2],C:[0,0,0,3],F:[2,0,1,0],Em:[0,4,3,2],Dm:[2
 const NOTES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const $=id=>document.getElementById(id);
 let seq=[],idx=0,holdN=0,listening=false,ctx,an,stream,timer;
-const NEED=4;// consecutive frames (~0.4s)
+const NEED=4;
+let mode='tune',hzs=[],okN={},tuned={},lastC={};
+const STR=[{n:'G',f:392.00},{n:'C',f:261.63},{n:'E',f:329.63},{n:'A',f:440.00}];
+function drawStrings(cur){$('strs').innerHTML=STR.map(x=>`<div class="str${tuned[x.n]?' ok':''}${cur===x.n?' cur':''}">${x.n}<small>${tuned[x.n]?'✓ tuned':(lastC[x.n]!==undefined?(lastC[x.n]>0?'+':'')+lastC[x.n]+' c':Math.round(x.f)+' Hz')}</small></div>`).join('')}
+// McLeod normalised square difference pitch detector
+function pitch(x,sr){const n=x.length,minL=Math.floor(sr/600),maxL=Math.ceil(sr/180);const v=new Float32Array(maxL+2);let mx=0;
+ for(let t=minL;t<=maxL+1;t++){let a=0,m=0;for(let i=0;i<n-t;i++){a+=x[i]*x[i+t];m+=x[i]*x[i]+x[i+t]*x[i+t]}v[t]=m?2*a/m:0;if(t<=maxL&&v[t]>mx)mx=v[t]}
+ if(mx<0.6)return null;let best=-1;for(let t=minL+1;t<=maxL;t++){if(v[t]>=0.9*mx&&v[t]>=v[t-1]&&v[t]>=v[t+1]){best=t;break}}if(best<0)return null;
+ const a=v[best-1],b=v[best],c=v[best+1],d=a-2*b+c,sh=d?0.5*(a-c)/d:0;return {f:sr/(best+sh),clar:mx}}
+function tuneStep(x,sr){let rms=0;for(let i=0;i<x.length;i++)rms+=x[i]*x[i];rms=Math.sqrt(rms/x.length);
+ $('lvl').style.width=Math.min(100,Math.sqrt(rms)*400)+'%';
+ const p=rms>0.0015?pitch(x,sr):null;if(!p){$('needle').style.opacity=.3;return}
+ hzs.push(p.f);if(hzs.length>5)hzs.shift();const f=[...hzs].sort((a,b)=>a-b)[hzs.length>>1];
+ let s=STR[0],bc=1e9;STR.forEach(x=>{const c=1200*Math.log2(f/x.f);if(Math.abs(c)<Math.abs(bc)){bc=c;s=x}});
+ const c=Math.round(bc);lastC[s.n]=c;$('tNote').textContent=s.n;$('tHz').textContent=f.toFixed(1)+' Hz';$('tCents').textContent=(c>0?'+':'')+c+' cents';
+ const n=$('needle');n.style.opacity=1;n.style.left=(50+Math.max(-50,Math.min(50,c)))+'%';
+ if(Math.abs(c)<=5){okN[s.n]=(okN[s.n]||0)+1;$('tHint').textContent='In tune ✓ hold it…';if(okN[s.n]>=8)tuned[s.n]=true}
+ else{okN[s.n]=0;$('tHint').textContent=c<0?'Too low: tighten the peg a little':'Too high: loosen the peg a little'}
+ if(STR.every(x=>tuned[x.n]))$('tHint').textContent='All four strings tuned! Tap “2. Play Riptide”';
+ drawStrings(s.n)}
+drawStrings();// consecutive frames (~0.4s)
 
 function parse(t){const out=[];t.split('\n').forEach(l=>{const m=l.split(':');if(m.length<2)return;const name=m[0].trim();m.slice(1).join(':').trim().split(/\s+/).forEach(c=>{if(CH[c])out.push({c,s:name})})});return out}
 function load(t){const s=parse(t);if(!s.length)return;seq=s;idx=0;render()}
@@ -171,7 +215,7 @@ async function startMic(){if(listening){stop();return}
  catch(e){$('state').textContent='Mic blocked';$('info').innerHTML='<b>The microphone is blocked here.</b> Claude’s artifact viewer doesn’t allow mic access. Open the downloaded HTML file in Chrome or Safari for live listening, or use “Check a recording” to upload a voice memo of you playing.';ctx.close();return}
  if(ctx.state!=='running')await ctx.resume();an=ctx.createAnalyser();an.fftSize=N;ctx.createMediaStreamSource(stream).connect(an);
  const buf=new Float32Array(N);listening=true;$('mic').textContent='⏹ Stop listening';$('state').textContent='Listening…';
- timer=setInterval(()=>{if(ctx.state==='suspended')ctx.resume();an.getFloatTimeDomainData(buf);step(analyse(buf,ctx.sampleRate))},80)}
+ timer=setInterval(()=>{if(ctx.state==='suspended')ctx.resume();an.getFloatTimeDomainData(buf);if(mode==='tune')tuneStep(buf.subarray(N-4096),ctx.sampleRate);else step(analyse(buf,ctx.sampleRate))},80)}
 function stop(){listening=false;clearInterval(timer);stream&&stream.getTracks().forEach(t=>t.stop());ctx&&ctx.close();$('mic').textContent='🎤 Listen live';$('state').textContent='Not listening'}
 
 async function checkFile(f){if(!f)return;$('state').textContent='Analysing recording…';
@@ -182,6 +226,8 @@ async function checkFile(f){if(!f)return;$('state').textContent='Analysing recor
  catch(e){$('state').textContent='Could not read that file'}}
 
 $('mic').onclick=startMic;
+function setMode(m){mode=m;document.body.classList.toggle('tune',m==='tune');$('tTune').classList.toggle('on',m==='tune');$('tPlay').classList.toggle('on',m!=='tune');holdN=0;render()}
+$('tTune').onclick=()=>setMode('tune');$('tPlay').onclick=()=>setMode('play');
 $('file').onchange=e=>checkFile(e.target.files[0]);
 $('skip').onclick=()=>{if(idx<seq.length){idx++;render()}};
 $('reset').onclick=()=>{idx=0;render()};

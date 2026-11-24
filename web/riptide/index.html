@@ -30,6 +30,8 @@ h1{font-size:clamp(26px,5vw,40px);line-height:1.05;margin:0 0 4px}
 .pill{background:rgba(255,255,255,.16);border-radius:99px;padding:4px 12px}
 .hold{height:8px;border-radius:9px;background:rgba(255,255,255,.2);margin-top:10px;overflow:hidden}
 .hold i{display:block;height:100%;width:0;background:var(--coral);transition:width .08s}
+.lvl{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;opacity:.9}.lvl>div{flex:1;height:6px;border-radius:9px;background:rgba(255,255,255,.2);overflow:hidden}.lvl i{display:block;height:100%;width:0;background:#fff3a8}
+select{font:600 16px Rubik,sans-serif;margin-left:8px;background:transparent;color:inherit;border:0}
 .strip{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0}
 .strip span{min-width:44px;text-align:center;padding:6px 8px;border-radius:10px;background:var(--panel);font-weight:600;cursor:pointer;border:2px solid transparent}
 .strip span.done{background:var(--ok);color:#fff}
@@ -61,7 +63,8 @@ textarea{width:100%;min-height:150px;font:15px/1.5 ui-monospace,monospace;border
       <div class="sec" id="sec">Intro</div>
       <div class="big" id="big">Am</div>
       <div class="next">Next: <b id="nxt">G</b></div>
-      <div class="status"><span class="pill" id="state">Not listening</span><span class="pill">Hearing: <b id="heard">–</b></span></div>
+      <div class="status"><span class="pill" id="state">Not listening</span><span class="pill">Hearing: <b id="heard">–</b></span><span class="pill">Match: <b id="conf">–</b></span></div>
+      <div class="lvl"><span>Mic level</span><div><i id="lvl"></i></div></div>
       <div class="hold"><i id="hold"></i></div>
       <div class="done-msg" id="fin">Song complete! 🌊</div>
     </div>
@@ -75,6 +78,7 @@ textarea{width:100%;min-height:150px;font:15px/1.5 ui-monospace,monospace;border
   <div class="ctl">
     <button class="go" id="mic">🎤 Listen live</button>
     <label class="btn">📁 Check a recording<input type="file" id="file" accept="audio/*,video/*"></label>
+    <label class="btn sens">Sensitivity <select id="sens"><option value="0.72">Strict</option><option value="0.6" selected>Normal</option><option value="0.5">Easy</option></select></label>
     <button id="skip">Skip chord</button>
     <button id="reset">Start over</button>
   </div>
@@ -105,7 +109,7 @@ const SHAPE={Am:[2,0,0,0],G:[0,2,3,2],C:[0,0,0,3],F:[2,0,1,0],Em:[0,4,3,2],Dm:[2
 const NOTES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const $=id=>document.getElementById(id);
 let seq=[],idx=0,holdN=0,listening=false,ctx,an,stream,timer;
-const NEED=5;// consecutive frames (~0.4s)
+const NEED=4;// consecutive frames (~0.4s)
 
 function parse(t){const out=[];t.split('\n').forEach(l=>{const m=l.split(':');if(m.length<2)return;const name=m[0].trim();m.slice(1).join(':').trim().split(/\s+/).forEach(c=>{if(CH[c])out.push({c,s:name})})});return out}
 function load(t){const s=parse(t);if(!s.length)return;seq=s;idx=0;render()}
@@ -136,23 +140,38 @@ const N=8192;
 function analyse(buf,sr){let rms=0;for(let i=0;i<N;i++)rms+=buf[i]*buf[i];rms=Math.sqrt(rms/N);
  const re=new Float32Array(N),im=new Float32Array(N);for(let i=0;i<N;i++)re[i]=buf[i]*(.5-.5*Math.cos(2*Math.PI*i/(N-1)));fft(re,im);
  const chroma=new Array(12).fill(0);for(let k=1;k<N/2;k++){const f=k*sr/N;if(f<240||f>2100)continue;const m=Math.sqrt(re[k]*re[k]+im[k]*im[k]);const midi=69+12*Math.log2(f/440);const pc=((Math.round(midi)%12)+12)%12;chroma[pc]+=Math.sqrt(m)}
- const mx=Math.max(...chroma)||1;const c=chroma.map(v=>v/mx);
- let best=null,bs=-1;const nrm=Math.hypot(...c)||1;for(const k in CH){let d=0;CH[k].forEach(p=>d+=c[p]);const sc=d/(Math.sqrt(3)*nrm);if(sc>bs){bs=sc;best=k}}
- return {rms,c,best,score:bs}}
+ const srt=[...chroma].sort((a,b)=>a-b),floor=srt[5];const mx=Math.max(...chroma)-floor||1;const c=chroma.map(v=>Math.max(0,v-floor)/mx);
+ return {rms,c}}
+function classify(c){
+ const sc={};let best=null,bs=-1;const nrm=Math.hypot(...c)||1;for(const k of cands()){let d=0;CH[k].forEach(p=>d+=c[p]);const s1=d/(Math.sqrt(3)*nrm);sc[k]=s1;if(s1>bs){bs=s1;best=k}}
+ return {best,score:bs,sc}}
+function cands(){const u=[...new Set(seq.map(x=>x.c))];return u.length>1?u:Object.keys(CH)}
+let sm=new Array(12).fill(0),noise=0.002;
 
-function step(r){bars.forEach((b,i)=>{b.style.height=Math.max(2,r.c[i]*100)+'%';b.classList.toggle('on',r.c[i]>.6)});
- const loud=r.rms>0.008,ok=loud&&r.score>0.72;$('heard').textContent=ok?r.best:'–';
+function step(r){
+ if(r.rms<noise*3)noise=noise*0.95+r.rms*0.05;
+ const loud=r.rms>Math.max(0.0015,noise*2.5);
+ sm=sm.map((v,i)=>loud?v*0.5+r.c[i]*0.5:v*0.8);
+ const m=Math.max(...sm)||1,c=sm.map(v=>v/m);
+ bars.forEach((b,i)=>{b.style.height=Math.max(2,c[i]*100)+'%';b.classList.toggle('on',c[i]>.6)});
+ $('lvl').style.width=Math.min(100,Math.sqrt(r.rms)*400)+'%';
+ const k=classify(c),th=+$('sens').value;
+ $('heard').textContent=loud&&k.score>th-0.1?k.best:'–';
  if(idx>=seq.length)return false;
- if(ok&&r.best===seq[idx].c){holdN++}else holdN=Math.max(0,holdN-1);
+ const tgt=seq[idx].c,ts=k.sc[tgt]||0;
+ $('conf').textContent=loud?Math.round(ts*100)+'%':'–';
+ const ok=loud&&ts>=th&&ts>=k.score-0.04;
+ if(ok){holdN++}else holdN=Math.max(0,holdN-1);
  $('hold').style.width=(holdN/NEED*100)+'%';
  if(holdN>=NEED){$('big').classList.add('hit');setTimeout(()=>$('big').classList.remove('hit'),250);idx++;render();return true}return false}
 
 async function startMic(){if(listening){stop();return}
+ ctx=new (window.AudioContext||window.webkitAudioContext)();ctx.resume&&ctx.resume();
  try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}})}
- catch(e){$('state').textContent='Mic blocked';$('info').innerHTML='<b>The microphone is blocked here.</b> Claude’s artifact viewer doesn’t allow mic access. Open the downloaded HTML file in Chrome or Safari for live listening, or use “Check a recording” to upload a voice memo of you playing.';return}
- ctx=new (window.AudioContext||window.webkitAudioContext)();an=ctx.createAnalyser();an.fftSize=N;ctx.createMediaStreamSource(stream).connect(an);
+ catch(e){$('state').textContent='Mic blocked';$('info').innerHTML='<b>The microphone is blocked here.</b> Claude’s artifact viewer doesn’t allow mic access. Open the downloaded HTML file in Chrome or Safari for live listening, or use “Check a recording” to upload a voice memo of you playing.';ctx.close();return}
+ if(ctx.state!=='running')await ctx.resume();an=ctx.createAnalyser();an.fftSize=N;ctx.createMediaStreamSource(stream).connect(an);
  const buf=new Float32Array(N);listening=true;$('mic').textContent='⏹ Stop listening';$('state').textContent='Listening…';
- timer=setInterval(()=>{an.getFloatTimeDomainData(buf);step(analyse(buf,ctx.sampleRate))},80)}
+ timer=setInterval(()=>{if(ctx.state==='suspended')ctx.resume();an.getFloatTimeDomainData(buf);step(analyse(buf,ctx.sampleRate))},80)}
 function stop(){listening=false;clearInterval(timer);stream&&stream.getTracks().forEach(t=>t.stop());ctx&&ctx.close();$('mic').textContent='🎤 Listen live';$('state').textContent='Not listening'}
 
 async function checkFile(f){if(!f)return;$('state').textContent='Analysing recording…';
